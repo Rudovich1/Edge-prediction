@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "graph2"
+name = "core2"
 version = "0.1.0"
 description = ""
 authors = ["Kirill <Rudovichkirill@gmail.com>"]
@@ -12,7 +12,6 @@ sklearn = "^0.0.post5"
 pickle-mixin = "^1.0.2"
 matplotlib = "^3.7.1"
 scikit-learn = "^1.2.2"
-
 
 [build-system]
 requires = ["poetry-core"]
