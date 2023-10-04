@@ -2,6 +2,7 @@
 
 #include "graph.hpp"
 #include "graph-reader.hpp"
+#include "tools/csv.hpp"
 #include <filesystem>
 #include <iostream>
 #include <fstream>
@@ -10,41 +11,36 @@
 
 
 int main(int argc, char* argv[])
-{  
+{
     std::string str_graph_path;
     std::string str_out_path;
-    std::ostream* out = &std::cout;
+    std::ofstream out;
+
     #ifdef DEBUG
-        argc = 3;
         str_graph_path = "../data/radoslaw_email_email.txt";
+        str_out_path = "DEBUG_log.csv";
     #else
         str_graph_path = argv[1];
+        str_out_path = argv[2];
     #endif
-    
-    if (argc < 2 || argc > 3)
-    {
-        std::cout << "error 1";
-        return 1;
-    }
-    if (argc == 3)
-    {
-        #ifdef DEBUG
-            str_out_path = "log.txt";
-        #else
-            str_out_path = argv[2];
-        #endif
 
-        out = new std::ofstream(str_out_path);
-    }
+    out.open(str_out_path);
+
+    std::vector<std::vector<double>> res(1);
+    std::vector<std::string> column_names;
 
     std::filesystem::path graph_path(str_graph_path);
 
     Graph::Graph graph(Graph::GraphReader::readGraphData(graph_path));
     graph.setTime(ULLONG_MAX);
 
-    *out << "Number of vertices: " << graph.getNumVertices() << '\n'
-        << "Number of edges: " << graph.getNumEdges() << '\n'
-        << "Graph density: " << graph.getDensity() << '\n';
+    res[0].emplace_back(graph.getNumVertices());
+    res[0].emplace_back(graph.getNumEdges());
+    res[0].emplace_back(graph.getDensity());
+
+    column_names.emplace_back("NumVerts");
+    column_names.emplace_back("NumEdges");
+    column_names.emplace_back("GrDens");
 
     std::vector<std::vector<Graph::Vertex>> components = graph.getWeakComponents();
     size_t max_graph_id = 0;
@@ -58,67 +54,86 @@ int main(int argc, char* argv[])
 
     Graph::Graph max_component = graph.extractSubgraph(components[max_graph_id]);
     
-    *out  << "Number components of weak connectivity: " << components.size() << '\n'
-        << "Share of vertices in the maximum component: " << (double)max_component.getNumVertices() / graph.getNumVertices() << '\n'
-        << "Number of vertices: " << max_component.getNumVertices() << '\n'
-        << "Number of edges: " << max_component.getNumEdges() << '\n'
-        << "Graph density: " << max_component.getDensity() << '\n' << '\n';
+    res[0].emplace_back(components.size());
+    res[0].emplace_back((double)max_component.getNumVertices() / graph.getNumVertices());
+    res[0].emplace_back(max_component.getNumVertices());
+    res[0].emplace_back(max_component.getNumEdges());
+    res[0].emplace_back(max_component.getDensity());
 
+    column_names.emplace_back("NumComp");
+    column_names.emplace_back("MC_ShareVerts");
+    column_names.emplace_back("MC_NumVerts");
+    column_names.emplace_back("MC_NumEdges");
+    column_names.emplace_back("MC_GrDens");
     
     std::vector<Graph::Vertex> random_subgraph = max_component.getRandomSubgraph(500);
     std::vector<Graph::Vertex> snowball_subgraph = max_component.getSnowballSubgraph(500);
 
     std::vector<size_t> static_data_rand = max_component.getStaticData(random_subgraph);
     std::vector<size_t> static_data_snow = max_component.getStaticData(snowball_subgraph);
-
-    *out << "Radius: ";
     
     if (max_component.getNumVertices() < 4000 && max_component.getNumEdges() * max_component.getNumVertices() < 10'000'000)
     {
-        *out << max_component.getRadius() << " / ";
+        res[0].emplace_back(max_component.getRadius());
     }
     else
     {
-        *out << "__ / ";
+        res[0].emplace_back(-1.);
     }
-    *out << static_data_rand[0] << " / " << static_data_snow[0] << '\n';
+    res[0].emplace_back(static_data_rand[0]);
+    res[0].emplace_back(static_data_snow[0]);
 
-    *out << "Diameter: ";
+    column_names.emplace_back("MC_Rad");
+    column_names.emplace_back("MC_RS_Rad");
+    column_names.emplace_back("MC_SS_Rad");
     
     if (max_component.getNumVertices() < 4000 && max_component.getNumEdges() * max_component.getNumVertices() < 10'000'000)
     {
-        *out << max_component.getDiameter() << " / ";
+        res[0].emplace_back(max_component.getDiameter());
     }
     else
     {
-        *out << "__ / ";
+        res[0].emplace_back(-1.);
     }
-    *out << static_data_rand[1] << " / " << static_data_snow[1] << '\n';
+    res[0].emplace_back(static_data_rand[1]);
+    res[0].emplace_back(static_data_snow[1]);
 
-    *out << "90th percentile: ";
-    
+    column_names.emplace_back("MC_Diam");
+    column_names.emplace_back("MC_RS_Diam");
+    column_names.emplace_back("MC_SS_Diam");
+
     if (max_component.getNumVertices() < 4000 && max_component.getNumEdges() * max_component.getNumVertices() < 10'000'000)
     {
-        *out << max_component.getPercentile(90) << " / ";
+       res[0].emplace_back(max_component.getPercentile(90));
     }
     else
     {
-        *out << "__ / ";
+        res[0].emplace_back(-1.);
     }
-    *out << static_data_rand[2] << " / " << static_data_snow[2] << '\n';
+    res[0].emplace_back(static_data_rand[2]);
+    res[0].emplace_back(static_data_snow[2]);
+
+    column_names.emplace_back("MC_90P");
+    column_names.emplace_back("MC_RS_90P");
+    column_names.emplace_back("MC_SS_90P");
     
-    *out << "Average clustering coefficient: ";
     if (max_component.getR2() < 10'000'000)
     {
-        *out << max_component.getClusteringCoefficient() << " / ";
+        res[0].emplace_back(max_component.getClusteringCoefficient());
     }
     else
     {
-        *out << "__ / ";
+        res[0].emplace_back(-1.);
     }
-    *out << max_component.getClusteringCoefficient(random_subgraph) << " / " << max_component.getClusteringCoefficient(snowball_subgraph) << '\n';
+    res[0].emplace_back(max_component.getClusteringCoefficient(random_subgraph));
+    res[0].emplace_back(max_component.getClusteringCoefficient(snowball_subgraph));
 
-    *out << "Pearson correlation coefficient: " << max_component.getPearsonsCoefficient();
+    column_names.emplace_back("MC_CC");
+    column_names.emplace_back("MC_RS_CC");
+    column_names.emplace_back("MC_SS_CC");
 
-    out->flush();
+    res[0].emplace_back(max_component.getPearsonsCoefficient());
+    column_names.emplace_back("MC_PC");
+
+    toCSV(column_names, res, out);
 }
